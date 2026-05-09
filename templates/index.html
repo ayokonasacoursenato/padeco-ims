@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PADECO IMS | Dashboard</title>
+    
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
+    
+    <style>
+        body { background: #f5f7fb; font-family: 'Inter', sans-serif; }
+        .sidebar { position: fixed; width: 260px; height: 100vh; background: #0f172a; color: white; padding: 20px; z-index: 100; }
+        .sidebar h2 { font-size: 1.5rem; font-weight: 800; color: #3b82f6; margin-bottom: 30px; padding-left: 10px; }
+        .sidebar a { display: block; padding: 12px; color: #94a3b8; text-decoration: none; border-radius: 8px; margin-bottom: 5px; transition: 0.3s; }
+        .sidebar a:hover, .sidebar a.active { background: #1e293b; color: white; }
+        .sidebar a.active { background: #2563eb; color: white; }
+        
+        .main { margin-left: 260px; padding: 40px; }
+        .card-custom { border: none; border-radius: 16px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); background: white; margin-bottom: 24px; }
+        .kpi-card { padding: 24px; height: 100%; transition: 0.3s; border-radius: 20px; }
+        .kpi-value { font-size: 1.7rem; font-weight: 700; color: #1e293b; margin: 5px 0; }
+        .prediction-badge { font-size: 0.75rem; padding: 5px 12px; border-radius: 50px; font-weight: 600; }
+        .chart-container { position: relative; height: 350px; width: 100%; }
+    </style>
+</head>
+<body>
+
+<div class="sidebar">
+    <h2>INVENTRA</h2>
+    <a class="active" href="/">Dashboard</a>
+    {% if role == 'admin' %}
+        <a href="/inventory">Master Inventory</a>
+    {% endif %}
+    <a href="/production">Production</a>
+    <a href="/purchasing">Purchasing</a>
+    {% if role == 'admin' %}
+        <a href="/users">User Management</a>
+    {% endif %}
+
+    <div class="position-absolute bottom-0 start-0 w-100 p-3">
+        <div class="bg-dark p-3 rounded-4 small">
+            <div class="text-muted">User: <span class="text-white">{{ username }}</span></div>
+            <div class="text-primary fw-bold">{{ role|upper }}</div>
+            <a href="/logout" class="btn btn-outline-danger btn-sm w-100 mt-2">Logout</a>
+        </div>
+    </div>
+</div>
+
+<div class="main">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 fw-bold mb-0 text-dark">Predictive Analytics</h1>
+            <p class="text-muted small mb-0">Base sa 1-Year Historical Production Data</p>
+        </div>
+        <div id="currentDate" class="badge bg-white text-dark border p-2 shadow-sm"></div>
+    </div>
+
+    <div class="row g-4 mb-4">
+        <div class="col-md-3">
+            <div class="card card-custom kpi-card border-bottom border-4 border-warning">
+                <div class="small text-muted fw-bold text-uppercase">Total Inventory Value</div>
+                <div class="kpi-value">₱{{ "{:,.2f}".format(total_inventory_value) }}</div>
+                <div class="text-warning extra-small">Estimated Asset</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card card-custom kpi-card border-bottom border-4 border-info">
+                <div class="small text-muted fw-bold text-uppercase">AI Budget Forecast</div>
+                <div class="kpi-value text-info">₱{{ "{:,.2f}".format(predicted_expenses) }}</div>
+                <div class="extra-small text-muted">Next 30 Days Requirement</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card card-custom kpi-card border-bottom border-4 border-danger">
+                <div class="small text-muted fw-bold text-uppercase">Critical Stock Alert</div>
+                <div class="kpi-value text-danger">{{ low_stock_count }}</div>
+                <div class="extra-small text-muted">Items below safety margin</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card card-custom kpi-card border-bottom border-4 border-primary">
+                <div class="small text-muted fw-bold text-uppercase">Avg Daily Usage</div>
+                <div class="kpi-value text-primary">{{ forecast }} <small class="fs-6 text-muted">bags</small></div>
+                <div class="extra-small text-muted">Combined burn rate</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-lg-8">
+            <div class="card card-custom p-4">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h5 class="fw-bold mb-0">Consumption Trend (12 Months)</h5>
+                    <span class="badge bg-primary-subtle text-primary">ML Moving Average</span>
+                </div>
+                <div class="chart-container">
+                    <canvas id="stockChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card card-custom p-4 h-100 shadow-sm border-0 bg-primary text-white">
+                <h5 class="fw-bold mb-4">AI Strategic Insight</h5>
+                
+                <div class="mb-4 bg-white bg-opacity-10 p-3 rounded-4">
+                    <label class="small fw-bold opacity-75">TOP RECOMMENDATION</label>
+                    <p class="mb-0 fw-bold mt-1" style="font-size: 0.95rem;">{{ recommendation }}</p>
+                </div>
+
+                <div class="mb-4">
+                    <label class="small fw-bold opacity-75 mb-2">STOCK-OUT PREDICTIONS</label>
+                    {% for item in analyzed_items %}
+                    <div class="d-flex justify-content-between align-items-center mb-2 p-2 rounded-3 bg-white bg-opacity-10">
+                        <span class="small">{{ item.name }}</span>
+                        <span class="badge {{ 'bg-danger shadow' if item.days_left != 'N/A' and item.days_left <= 3 else 'bg-light text-dark' }}">
+                            {{ item.days_left }}{{ ' Days Left' if item.days_left != 'N/A' else '' }}
+                        </span>
+                    </div>
+                    {% endfor %}
+                </div>
+
+                <div class="mt-auto">
+                    <div class="small opacity-75 fw-bold mb-1">SYSTEM STATUS</div>
+                    <div class="progress" style="height: 6px; background: rgba(255,255,255,0.2);">
+                        <div class="progress-bar bg-info" style="width: 100%"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card card-custom p-4 mt-4">
+        <h5 class="fw-bold mb-4">Inventory Forecasting & Procurement Plan</h5>
+        <div class="table-responsive">
+            <table id="inventoryTable" class="table table-hover align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>Product</th>
+                        <th>Current Stock</th>
+                        <th>Avg. Daily Use</th>
+                        <th>Forecast (30D)</th>
+                        <th>Est. Budget</th>
+                        <th>Stock-out Risk</th>
+                    </tr>
+                </thead>
+                <tbody>
+    {% for item in analyzed_items %}
+    <tr>
+        <td>
+            <div class="fw-bold">{{ item.name }}</div>
+            <div class="extra-small text-muted">₱{{ "{:,.2f}".format(item.price) }} / bag</div>
+        </td>
+        <td><span class="h6 mb-0 fw-bold">{{ item.qty }}</span> <small>bags</small></td>
+        
+        <td class="text-secondary">
+    {{ (item.forecast / 30)|round(1) }} <small>bags/day</small>
+</td>
+
+<td class="text-primary fw-bold">
+    {{ item.forecast|round(1) }} <small>bags</small>
+</td>
+
+        <td class="fw-bold text-dark">₱{{ "{:,.2f}".format(item.predicted_cost) }}</td>
+        
+        <td>
+            <div class="d-flex align-items-center">
+                <span class="badge prediction-badge bg-{{ item.color }} me-2">
+                    {{ item.status }}
+                </span>
+                <small class="fw-bold text-{{ item.color }}">
+    {% if item.forecast > 0 %}
+        {{ (item.qty / (item.forecast / 30))|round(1) }}d left
+    {% else %}
+        No usage
+    {% endif %}
+</small>
+            </div>
+        </td>
+    </tr>
+    {% endfor %}
+</tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+
+<script>
+    document.getElementById('currentDate').innerText = new Date().toLocaleDateString('en-PH', { 
+        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' 
+    });
+
+    $(document).ready(function() {
+        $('#inventoryTable').DataTable({
+            pageLength: 5,
+            lengthChange: false,
+            language: { searchPlaceholder: "Search forecasting data...", search: "" }
+        });
+    });
+
+    const ctx = document.getElementById('stockChart').getContext('2d');
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: ['Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'], 
+            datasets: [{
+                label: 'Historical Consumption',
+                data: [850, 920, 880, 1100, 1250, 1400, 950, 870, 910, 1050, 1150, {{ forecast }}],
+                borderColor: '#2563eb',
+                backgroundColor: 'rgba(37, 99, 235, 0.05)',
+                fill: true,
+                tension: 0.4,
+                pointRadius: 4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: { 
+                y: { beginAtZero: true, grid: { color: '#f1f5f9' } },
+                x: { grid: { display: false } }
+            }
+        }
+    });
+</script>
+</body>
+</html>

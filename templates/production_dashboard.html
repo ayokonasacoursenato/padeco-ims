@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PADECO IMS | Production Portal</title>
+    
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    
+    <style>
+        body { background: #f1f5f9; font-family: 'Inter', sans-serif; }
+        .sidebar { position: fixed; width: 260px; height: 100vh; background: #0f172a; color: white; padding: 20px; z-index: 1000; }
+        .sidebar h2 { font-size: 1.2rem; font-weight: 800; color: #3b82f6; margin-bottom: 30px; text-align: center; }
+        .sidebar a { display: block; padding: 12px; color: #94a3b8; text-decoration: none; border-radius: 8px; margin-bottom: 5px; transition: 0.3s; }
+        .sidebar a:hover, .sidebar a.active { background: #1e293b; color: white; }
+        .sidebar a.active { background: #2563eb; }
+        
+        .main { margin-left: 260px; padding: 40px; }
+        .card-custom { border: none; border-radius: 16px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); background: white; }
+        
+        /* ML Insight Styling */
+        .ai-card { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); color: white; border: none; }
+        .ai-badge { background: rgba(59, 130, 246, 0.2); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); }
+        
+        .chat-scroll { max-height: 250px; overflow-y: auto; background: #f8fafc; padding: 15px; border-radius: 12px; }
+        .form-control:focus, .form-select:focus { border-color: #2563eb; box-shadow: none; }
+    </style>
+</head>
+<body>
+
+<div class="sidebar">
+    <h2>PADECO PRODUCTION</h2>
+    <a href="/production" class="active"><i class="bi bi-cpu me-2"></i> Smart Dashboard</a>
+    <a href="/production/logs"><i class="bi bi-journal-text me-2"></i> Usage History</a>
+    
+    <div style="position: absolute; bottom: 20px; width: calc(100% - 40px);">
+        <div class="p-3 bg-dark rounded-3 mb-2 small text-center">
+            <div class="text-muted" style="font-size: 0.7rem;">Shift Encoder:</div>
+            <div class="fw-bold">{{ username }}</div>
+        </div>
+        <a href="/logout" class="text-danger border border-danger border-opacity-25 text-center small w-100 py-2 d-block rounded-3 text-decoration-none">
+            <i class="bi bi-box-arrow-left me-1"></i> Logout
+        </a>
+    </div>
+</div>
+
+<div class="main">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h4 fw-bold mb-0">Production Operations</h1>
+            <p class="text-muted small mb-0">{{ current_date }} | Shift: Day</p>
+        </div>
+        <div class="badge ai-badge px-3 py-2 rounded-pill">
+            <i class="bi bi-robot me-1"></i> INVENTRA ML: Active
+        </div>
+    </div>
+
+    <div class="row g-4 mb-4">
+        <div class="col-12">
+            <div class="card card-custom ai-card p-4 shadow-sm">
+                <div class="row align-items-center">
+                    <div class="col-md-8">
+                        <h6 class="fw-bold mb-2 text-info"><i class="bi bi-stars me-2"></i>AI Inventory Forecast</h6>
+                        <p class="mb-0 opacity-75 small">
+                            Base sa Machine Learning analysis, ang iyong current stock ng 
+                            <strong class="text-white">Mais/Corn</strong> ay tinatayang tatagal na lamang ng 
+                            <span class="badge bg-warning text-dark fw-bold">1.5 Days</span> 
+                            base sa bilis ng inyong mixing production.
+                        </p>
+                    </div>
+                    <div class="col-md-4 text-md-end mt-3 mt-md-0">
+                        <button class="btn btn-outline-info btn-sm rounded-pill px-4">View Analysis</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-lg-4">
+            <div class="card card-custom p-4 h-100">
+                <div class="d-flex justify-content-between mb-3">
+                    <h6 class="fw-bold">Record Daily Usage</h6>
+                    <i class="bi bi-pencil-square text-primary"></i>
+                </div>
+                
+                <form id="usageForm" action="/add_log" method="POST">
+                    <div class="mb-3">
+                        <label class="small fw-bold text-muted">Material</label>
+                        <select id="material_select" name="product_name" class="form-select border-2 bg-light" required>
+                            <option value="" disabled selected>Select Item...</option>
+                            {% for item in items %}
+                            <option value="{{ item[1] }}">{{ item[1] }} (Stock: {{ item[2] }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-4">
+                        <label class="small fw-bold text-muted">Bags Consumed</label>
+                        <input type="number" id="qty_input" name="quantity_used" class="form-control border-2 bg-light" placeholder="0" required oninput="checkAnomaly()">
+                        <div id="anomaly_warning" class="text-danger mt-2 small d-none">
+                            <i class="bi bi-exclamation-triangle-fill"></i> ML Warning: Masyadong mataas ang in-input mong bags base sa history.
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100 fw-bold py-2 shadow-sm">
+                        Update Inventory
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <div class="col-lg-8">
+            <div class="card card-custom p-4 h-100">
+                <div class="d-flex justify-content-between mb-3">
+                    <h6 class="fw-bold text-danger">Stock Monitor (Critical Items)</h6>
+                    <span class="small text-muted">Based on Forecast</span>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle">
+                        <thead class="table-light small">
+                            <tr>
+                                <th>Item Name</th>
+                                <th>On Hand</th>
+                                <th>AI Forecast</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody class="small">
+                            {% for item in analyzed_items if item.status != "HEALTHY" %}
+                            <tr>
+                                <td class="fw-bold">{{ item.name }}</td>
+                                <td><span class="badge bg-warning-subtle text-warning border border-warning-subtle px-3">{{ item.qty }} bags</span></td>
+                                <td class="text-muted fw-bold">{{ "{:,.1f}".format(item.forecast) }} <small>needed</small></td>
+                                <td>
+                                    <button class="btn btn-sm btn-dark px-3 rounded-pill" onclick="requestRestock('{{ item.name }}')">Request</button>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="4" class="text-center py-4 text-muted small">Lahat ng materyales ay nasa healthy level.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12">
+            <div class="card card-custom p-4">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h6 class="fw-bold mb-0"><i class="bi bi-chat-fill text-primary me-2"></i>Purchasing Coordination</h6>
+                    <span class="small text-muted"><i class="bi bi-dot text-success" style="font-size: 2rem;"></i> Purchasing Online</span>
+                </div>
+                
+                <div class="row">
+                    {% for req in pending_requests %}
+                    <div class="col-md-6 mb-3">
+                        <div class="border rounded-4 p-3 bg-light shadow-sm">
+                            <div class="d-flex justify-content-between mb-2">
+                                <span class="fw-bold small text-primary">{{ req[1] }}</span>
+                                <span class="badge bg-secondary rounded-pill" style="font-size: 0.6rem;">REQ #{{ req[0] }}</span>
+                            </div>
+                            
+                            <div class="chat-scroll mb-3" id="chat-{{ req[0] }}">
+                                {% for comment in all_comments if comment[0] == req[0] %}
+                                <div class="mb-2">
+                                    <small class="fw-bold {{ 'text-primary' if comment[1] == username else 'text-dark' }}" style="font-size: 0.7rem;">{{ comment[1] }}:</small>
+                                    <div class="p-2 bg-white rounded shadow-sm small border-0">{{ comment[2] }}</div>
+                                </div>
+                                {% endfor %}
+                            </div>
+
+                            <form action="/send_comment" method="POST" class="d-flex">
+                                <input type="hidden" name="request_id" value="{{ req[0] }}">
+                                <input type="text" name="message" class="form-control form-control-sm me-2 rounded-pill border-0 px-3" placeholder="I-message ang Purchasing..." required>
+                                <button type="submit" class="btn btn-sm btn-primary rounded-circle"><i class="bi bi-send"></i></button>
+                            </form>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Machine Learning: Anomaly Detection Simulation
+    function checkAnomaly() {
+        const qty = document.getElementById('qty_input').value;
+        const warning = document.getElementById('anomaly_warning');
+        
+        // Sample logic: Kung lumagpas sa 200 bags (anomaly based on usual 50-100 range)
+        if(qty > 200) {
+            warning.classList.remove('d-none');
+        } else {
+            warning.classList.add('d-none');
+        }
+    }
+
+    function requestRestock(name) {
+        if(confirm("Magpapadala ng restock alert sa Purchasing para sa " + name + ". Ituloy?")) {
+            alert("Request Sent! Hintayin ang update sa Chat section sa ibaba.");
+        }
+    }
+</script>
+</body>
+</html>

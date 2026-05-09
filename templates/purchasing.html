@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PADECO IMS | Purchasing</title>
+    
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    
+    <style>
+        body { background: #f5f7fb; font-family: 'Inter', sans-serif; }
+        
+        /* Sidebar Styles - Unified Consistency */
+        .sidebar { position: fixed; width: 260px; height: 100vh; background: #0f172a; color: white; padding: 20px; z-index: 100; }
+        .sidebar h2 { font-size: 1.5rem; font-weight: 800; color: #3b82f6; margin-bottom: 30px; padding-left: 10px; }
+        .sidebar a { display: block; padding: 12px; color: #94a3b8; text-decoration: none; border-radius: 8px; margin-bottom: 5px; transition: 0.3s; }
+        .sidebar a:hover, .sidebar a.active { background: #1e293b; color: white; }
+        .sidebar a.active { background: #2563eb; }
+        
+        .user-profile { 
+            background: #1e293b; 
+            padding: 15px; 
+            border-radius: 12px; 
+            position: absolute; 
+            bottom: 20px; 
+            width: calc(100% - 40px);
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .logout-btn {
+            display: block; text-align: center; width: 100%; background: rgba(239, 68, 68, 0.1);
+            color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.2); padding: 8px;
+            border-radius: 8px; text-decoration: none; font-size: 0.8rem; font-weight: 600;
+            transition: 0.3s; margin-top: 10px;
+        }
+        .logout-btn:hover { background: #ef4444; color: white; }
+
+        /* Main Content Styles */
+        .main { margin-left: 260px; padding: 40px; }
+        .card-custom { border: none; border-radius: 16px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); background: white; margin-bottom: 24px; }
+        
+        .status-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 5px; }
+        .dot-online { background-color: #22c55e; box-shadow: 0 0 8px #22c55e; }
+        
+        .form-label { font-weight: 600; color: #475569; font-size: 0.9rem; }
+        .recommendation-list { max-height: 600px; overflow-y: auto; padding-right: 10px; }
+        
+        /* Chat Styling */
+        .chat-container { max-height: 200px; overflow-y: auto; background: #f8fafc; border-radius: 12px; padding: 10px; }
+        .message-bubble { margin-bottom: 8px; padding: 8px 12px; border-radius: 12px; font-size: 0.8rem; }
+        .message-sent { background: #e2e8f0; color: #1e293b; align-self: flex-start; }
+        
+        .recommendation-list::-webkit-scrollbar { width: 6px; }
+        .recommendation-list::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
+    </style>
+</head>
+<body>
+
+<div class="sidebar">
+    <h2>PADECO IMS</h2>
+    <a href="/">Dashboard</a>
+    {% if role == 'admin' %}<a href="/inventory">Master Inventory</a>{% endif %}
+    {% if role == 'production' or role == 'admin' %}<a href="/production">Production</a>{% endif %}
+    <a class="active" href="/purchasing">Purchasing</a>
+    {% if role == 'admin' %}<a href="/users">User Management</a>{% endif %}
+
+    <div class="user-profile">
+        <div class="user-info-text mb-2">
+            <div style="font-size: 0.7rem; color: #94a3b8; font-weight: 600; text-transform: uppercase;">Current User</div>
+            <div class="fw-bold text-truncate" style="color: #f8fafc;">{{ username }}</div>
+            <div style="font-size: 0.75rem; color: #3b82f6;">{{ role|upper }}</div>
+        </div>
+        <a href="/logout" class="logout-btn">Logout Session</a>
+    </div>
+</div>
+
+<div class="main">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 fw-bold mb-0">Procurement & Purchasing</h1>
+            <p class="text-muted small">Manage orders and supply optimization</p>
+        </div>
+        <div class="card card-custom py-2 px-3 m-0 d-flex flex-row align-items-center shadow-sm">
+            <span class="status-dot dot-online"></span>
+            <span class="small fw-bold text-secondary">AI Forecast: Active</span>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-lg-5">
+            <div class="card card-custom p-4 border-top border-primary border-4 shadow-sm mb-4">
+                <h5 class="fw-bold mb-4">Manual Entry</h5>
+                
+                <form id="purchaseForm" action="/add_purchase" method="POST">
+                    <div class="mb-3">
+                        <label class="form-label">Select Item</label>
+                        <select id="p_name" name="product_name" class="form-select rounded-3 shadow-sm" required>
+                            <option value="" selected disabled>Choose product...</option>
+                            {% for item in items %}
+                            <option value="{{ item[1] }}">{{ item[1] }} (Stock: {{ item[2] }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="form-label">Order Quantity</label>
+                        <div class="input-group">
+                            <input type="number" id="p_qty" name="quantity_purchased" class="form-control rounded-3 shadow-sm" placeholder="0" min="1" required>
+                            <span class="input-group-text bg-light text-muted small">bags</span>
+                        </div>
+                    </div>
+
+                    <button type="button" class="btn btn-primary w-100 rounded-3 shadow-sm fw-bold py-2" onclick="confirmPurchase()">
+                        Process Order
+                    </button>
+                </form>
+            </div>
+            
+            <div class="card card-custom p-4 shadow-sm">
+                <h6 class="fw-bold mb-3"><i class="bi bi-chat-dots-fill text-primary me-2"></i>Request Messenger</h6>
+                <div class="recommendation-list" style="max-height: 400px;">
+                    {% if pending_requests %}
+                        {% for req in pending_requests %}
+                        <div class="border rounded-4 p-3 mb-3 bg-white shadow-sm">
+                            <div class="d-flex justify-content-between mb-2">
+                                <span class="fw-bold small">{{ req[1] }}</span>
+                                <span class="badge bg-secondary" style="font-size: 0.6rem;">REQ#{{ req[0] }}</span>
+                            </div>
+                            
+                            <div class="chat-container mb-2">
+                                {% for comment in all_comments %}
+                                    {% if comment[0] == req[0] %}
+                                    <div class="message-bubble message-sent">
+                                        <div class="fw-bold" style="font-size: 0.65rem;">{{ comment[1] }}</div>
+                                        <div>{{ comment[2] }}</div>
+                                        <div class="text-muted text-end" style="font-size: 0.55rem;">{{ comment[3] }}</div>
+                                    </div>
+                                    {% endif %}
+                                {% endfor %}
+                            </div>
+
+                            <form action="/send_comment" method="POST">
+                                <input type="hidden" name="request_id" value="{{ req[0] }}">
+                                <div class="input-group input-group-sm">
+                                    <input type="text" name="message" class="form-control border-0 bg-light" placeholder="Write a message..." required>
+                                    <button class="btn btn-primary px-3" type="submit"><i class="bi bi-send"></i></button>
+                                </div>
+                            </form>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="text-center py-4 opacity-50 small">Walang aktibong request.</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-7">
+            <div class="card card-custom p-4 h-100 shadow-sm overflow-hidden">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5 class="fw-bold mb-0">AI Optimization</h5>
+                    <span class="badge bg-primary-subtle text-primary rounded-pill px-3 py-2" style="font-size: 0.7rem;">MONTHLY ANALYSIS</span>
+                </div>
+                
+                <div class="recommendation-list">
+                    {% for item in analyzed_items if item.status != "HEALTHY" %}
+                    <div class="card mb-3 border-0 bg-light rounded-4 p-3 border-start border-4 border-{{ item.color|replace('bg-', '') if item.color else 'primary' }}">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div class="flex-grow-1">
+                                <h6 class="fw-bold mb-1 text-dark">{{ item.name }}</h6>
+                                <div class="small text-muted mb-2">
+                                    Forecasted Demand: <strong class="text-primary">{{ "{:,.2f}".format(item.forecast) }}</strong> bags
+                                </div>
+                                <div class="row g-2">
+                                    <div class="col-6">
+                                        <div class="p-2 bg-white rounded-3">
+                                            <div class="text-muted" style="font-size: 0.65rem; font-weight: 700; text-transform: uppercase;">Unit Price</div>
+                                            <div class="fw-bold text-dark small">₱{{ "{:,.2f}".format(item.price) }}</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="p-2 bg-white rounded-3">
+                                            <div class="text-muted" style="font-size: 0.65rem; font-weight: 700; text-transform: uppercase;">Expected Cost</div>
+                                            <div class="fw-bold text-success small">₱{{ "{:,.2f}".format(item.est_cost) }}</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <span class="badge bg-{{ item.color|replace('bg-', '') if item.color else 'primary' }} ms-2" style="font-size: 0.65rem;">{{ item.status }}</span>
+                        </div>
+                        
+                        <div class="mt-3">
+                            <button class="btn btn-sm btn-dark w-100 rounded-3 py-2 fw-bold shadow-sm" 
+                                    onclick="quickFill('{{ item.name }}', '{{ item.suggested }}')">
+                                Quick Fill Kulang ({{ "{:,.0f}".format(item.suggested) }} bags)
+                            </button>
+                        </div>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-5">
+                        <div class="display-6 mb-3 opacity-25">✔️</div>
+                        <p class="text-muted fw-bold">Supplies are Sufficient</p>
+                        <p class="small text-muted px-4">The AI predicts current stock levels are enough for the next production cycle.</p>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="confirmModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 16px;">
+            <div class="modal-body p-4 text-center">
+                <div class="mb-3 text-primary h1">📦</div>
+                <h5 class="fw-bold">Confirm Purchase?</h5>
+                <p class="text-muted small">Update stock for <span id="modal_name" class="fw-bold text-dark"></span> with <span id="modal_qty" class="fw-bold text-dark"></span> bags?</p>
+                <div class="d-grid gap-2 mt-4">
+                    <button type="button" class="btn btn-primary rounded-3 py-2 fw-bold shadow-sm" onclick="submitPurchase()">Yes, Confirm</button>
+                    <button type="button" class="btn btn-light rounded-3 py-2" data-bs-dismiss="modal">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    const modal = new bootstrap.Modal(document.getElementById('confirmModal'));
+
+    function confirmPurchase() {
+        const name = document.getElementById('p_name').value;
+        const qty = document.getElementById('p_qty').value;
+        if(!name || !qty) {
+            alert("Paki-pili ang product at ilagay ang saktong quantity.");
+            return;
+        }
+        document.getElementById('modal_name').innerText = name;
+        document.getElementById('modal_qty').innerText = qty;
+        modal.show();
+    }
+
+    function quickFill(name, qty) {
+        document.getElementById('p_name').value = name;
+        document.getElementById('p_qty').value = Math.ceil(parseFloat(qty));
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function submitPurchase() {
+        document.getElementById('purchaseForm').submit();
+    }
+</script>
+</body>
+</html>
