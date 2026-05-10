@@ -1,15 +1,16 @@
 import psycopg2
 import os
 
-# Kukunin nito ang URL mula sa Environment Variable ng Render
-DATABASE_URL = os.environ.get('postgresql://admin:TM7pO7B18TsBoy0AJvtYTC0yqxXdkksj@dpg-d7vk6k77f7vs73btqpn0-a/padeco_inventory)
+# TAMA: 'DATABASE_URL' lang ang ilalagay dito. 
+# Kukunin nito ang value na nilagay mo sa Render Environment tab.
+DATABASE_URL = os.environ.get('DATABASE_URL')
 
 try:
-    # Kung nahanap ang DATABASE_URL (nasa Render tayo)
     if DATABASE_URL:
+        # Kapag nasa Render (Live)
         conn = psycopg2.connect(DATABASE_URL, sslmode='require')
     else:
-        # Fallback sa local database mo kung wala sa Render
+        # Kapag nasa Laptop mo (Local)
         conn = psycopg2.connect(
             host="localhost",
             database="padeco_inventory",
