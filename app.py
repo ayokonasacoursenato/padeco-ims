@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request, redirect, url_for, session, flash
 from database import conn, cur
 from datetime import datetime
+import requests
 from forecasting import moving_average, detect_trend, predict_days_left
 from werkzeug.security import generate_password_hash
 from werkzeug.security import check_password_hash
@@ -9,6 +10,36 @@ import os
 app = Flask(__name__)
 app.secret_key = "padeco_secret_key"
 
+def get_weather_impact():
+    """Kukuha ng weather data para sa forecasting alert (Lipa City, Batangas)"""
+    API_KEY = "ba0ccf430038d0dcb3db3974acecbe91" 
+    CITY = "Lipa,PH" # <--- PH para sa Pilipinas
+    try:
+        # units=metric para Celsius agad
+        url = f"http://api.openweathermap.org/data/2.5/weather?q={CITY}&appid={API_KEY}&units=metric"
+        response = requests.get(url, timeout=3)
+        data = response.json()
+        
+        if response.status_code == 200:
+            temp = round(data['main']['temp'], 1) # Celsius na ito
+            condition = data['weather'][0]['main']
+            
+            if condition in ['Rain', 'Thunderstorm', 'Drizzle']:
+                msg = f"⚠️ HIGH RISK: {condition} in Lipa. Possible logistics delay."
+                impact = "Rain"
+            else:
+                msg = f"✅ NORMAL: {condition} in Lipa City. Operations smooth."
+                impact = "Clear"
+            
+            return {"message": msg, "temp": temp, "condition": impact}
+        else:
+            # Fallback kapag may error sa API (e.g. invalid key)
+            return {"message": "Weather service pending activation.", "temp": 31.0, "condition": "Clear"}
+            
+    except Exception as e:
+        # Fallback kapag walang internet
+        return {"message": "Weather service offline.", "temp": 30.0, "condition": "Clear"}
+    
 # =========================
 # DATABASE INITIALIZATION
 # =========================
@@ -57,6 +88,15 @@ CREATE TABLE IF NOT EXISTS request_comments (
     timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 )
 """)
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS request_comments (
+        id SERIAL PRIMARY KEY,
+        request_id INTEGER REFERENCES purchase_requests(id) ON DELETE CASCADE,
+        sender_name VARCHAR(100) NOT NULL,
+        message TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+    """)
     conn.commit()
 
 init_db()
@@ -110,55 +150,48 @@ def index():
     if session.get('role') == 'production':
         return redirect(url_for('production'))
     
+    # 1. Weather and Seasonal Info
+    weather = get_weather_impact()
+    current_month = datetime.now().strftime("%B")
+    
     cur.execute("SELECT id, product_name, quantity, barcode_id, unit_price FROM inventory ORDER BY product_name ASC")
     inventory_items = cur.fetchall()
 
     analyzed_items = []
-    total_forecast = 0
-    low_stock_count = 0
     total_inventory_value = 0
     predicted_expenses = 0 
-    any_priority = False
+    low_stock_count = 0
+    total_daily_usage = 0
 
     for item in inventory_items:
         p_id, p_name, p_qty, p_barcode, p_price = item
         current_price = float(p_price) if p_price else 0.0
         total_inventory_value += (current_price * p_qty)
         
-        # Kunin ang Daily Usage (Huling 30 entries)
-        cur.execute("""
-            SELECT quantity_used FROM production_logs 
-            WHERE product_name = %s 
-            ORDER BY log_date DESC LIMIT 30
-        """, (p_name,))
-        usage_history = [row[0] for row in cur.fetchall() if row[0] is not None]
+        # Kunin ang Historical Usage
+        cur.execute("SELECT quantity_used FROM production_logs WHERE product_name = %s ORDER BY log_date DESC LIMIT 30", (p_name,))
+        usage_history = [row[0] for row in cur.fetchall()]
         
-        # AI CALCULATIONS
-        # average_daily_usage ang ibinabalik ng moving_average (usually)
-        avg_daily_usage = moving_average(usage_history) 
-        
-        # 1. Gawing Monthly Forecast (30 Days)
-        p_forecast = avg_daily_usage * 30 
+        # 2. AI CALCULATIONS (Seasonal & Weather Aware)
+        # I-update ang predict_days_left sa forecasting.py para tanggapin ang weather condition
+        p_days_left = predict_days_left(p_qty, usage_history, weather['condition'])
         p_trend = detect_trend(usage_history)
         
-        # 2. Re-calculate Days Left base sa current stock at avg daily usage
-        # Gumamit tayo ng safety check para hindi mag-divide sa zero
-        if avg_daily_usage > 0:
-            p_days_left = round(p_qty / avg_daily_usage, 1)
-        else:
-            p_days_left = "N/A"
+        # Calculate daily usage for display
+        avg_usage = moving_average(usage_history)
+        total_daily_usage += avg_usage
         
+        # Monthly Forecast (30 Days)
+        p_forecast = avg_usage * 30
         item_predicted_cost = p_forecast * current_price
         predicted_expenses += item_predicted_cost
 
-        # DYNAMIC STATUS LOGIC
+        # Status Logic
         p_status, p_color = "HEALTHY", "success"
-        
-        # Priority kung mauubos na sa loob ng 7 araw (Standard lead time)
         if p_days_left != "N/A":
             if p_days_left <= 3:
                 p_status, p_color = "CRITICAL", "danger"
-                any_priority, low_stock_count = True, low_stock_count + 1
+                low_stock_count += 1
             elif p_days_left <= 7:
                 p_status, p_color = "WARNING", "warning"
                 low_stock_count += 1
@@ -166,30 +199,28 @@ def index():
         analyzed_items.append({
             'name': p_name, 
             'qty': p_qty, 
-            'barcode': p_barcode,
             'price': current_price,
-            'forecast': round(p_forecast, 2),
+            'forecast': p_forecast,
             'predicted_cost': item_predicted_cost,
             'trend': p_trend, 
             'days_left': p_days_left,
             'status': p_status, 
             'color': p_color
         })
-        total_forecast += p_forecast
 
-    recommendation = "URGENT: Stocks depleting." if any_priority else "Optimal stock levels."
+    recommendation = "URGENT: Stock up for peak season/weather." if low_stock_count > 0 else "Optimal levels for current season."
 
     return render_template('index.html', 
                            analyzed_items=analyzed_items, 
-                           forecast=round(total_forecast, 2),
+                           forecast=round(total_daily_usage, 1),
                            total_inventory_value=total_inventory_value,
                            predicted_expenses=predicted_expenses,
                            low_stock_count=low_stock_count, 
-                           any_priority=any_priority, 
                            recommendation=recommendation,
+                           weather=weather,
+                           current_month=current_month,
                            username=session['user'], 
-                           role=session['role'], 
-                           current_time=datetime.now().strftime("%I:%M %p"))
+                           role=session['role'])
 
 # =========================
 # INVENTORY CRUD (ADMIN)
@@ -480,6 +511,65 @@ def send_comment():
         conn.commit()
     
     return redirect(url_for('purchasing'))
+
+@app.route('/production_dashboard')
+def production_dashboard():
+    if 'user' not in session:
+        return redirect(url_for('login'))
+    
+    username = session.get('user')
+    role = session.get('role')
+    
+    # 1. Kunin ang Inventory Items
+    cur.execute("SELECT id, product_name, quantity FROM inventory ORDER BY product_name ASC")
+    items_raw = cur.fetchall()
+    
+    # Logic para sa analyzed_items (AI Forecast simulation)
+    analyzed_items = []
+    low_stock_count = 0
+    for row in items_raw:
+        # Gamitin ang forecasting function mo
+        forecast_val = predict_days_left(row[1]) 
+        status = "CRITICAL" if row[2] < 20 else "HEALTHY"
+        
+        if status == "CRITICAL":
+            low_stock_count += 1
+            
+        analyzed_items.append({
+            'name': row[1],
+            'qty': row[2],
+            'forecast': forecast_val,
+            'status': status
+        })
+    
+    # 2. Kunin ang total usage ngayong araw
+    today = datetime.now().strftime('%Y-%m-%d')
+    cur.execute("SELECT SUM(quantity_used) FROM production_logs WHERE log_date = %s", (today,))
+    total_today = cur.fetchone()[0] or 0
+    
+    # 3. Kunin ang Pending Requests para sa Chat
+    cur.execute("SELECT id, product_name, quantity_requested FROM purchase_requests WHERE status = 'Pending'")
+    pending_requests = cur.fetchall()
+    
+    # 4. Kunin ang Comments (with formatted time)
+    cur.execute("""
+        SELECT request_id, sender_name, message, 
+        TO_CHAR(created_at, 'HH:MI AM') as time 
+        FROM request_comments 
+        ORDER BY created_at ASC
+    """)
+    all_comments = cur.fetchall()
+
+    return render_template('production_dashboard.html', 
+                           username=username, 
+                           role=role,
+                           items=items_raw,
+                           total_today=total_today,
+                           low_stock_count=low_stock_count,
+                           analyzed_items=analyzed_items,
+                           pending_requests=pending_requests,
+                           all_comments=all_comments,
+                           current_date=datetime.now().strftime('%B %d, %Y'))
 
 if __name__ == '__main__':
     app.run(debug=True)

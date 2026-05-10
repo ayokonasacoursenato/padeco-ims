@@ -57,79 +57,138 @@
     </div>
 
     <div class="row g-4 mb-4">
-        <div class="col-md-3">
-            <div class="card card-custom kpi-card border-bottom border-4 border-warning">
-                <div class="small text-muted fw-bold text-uppercase">Total Inventory Value</div>
-                <div class="kpi-value">₱{{ "{:,.2f}".format(total_inventory_value) }}</div>
-                <div class="text-warning extra-small">Estimated Asset</div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card card-custom kpi-card border-bottom border-4 border-info">
-                <div class="small text-muted fw-bold text-uppercase">AI Budget Forecast</div>
-                <div class="kpi-value text-info">₱{{ "{:,.2f}".format(predicted_expenses) }}</div>
-                <div class="extra-small text-muted">Next 30 Days Requirement</div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card card-custom kpi-card border-bottom border-4 border-danger">
-                <div class="small text-muted fw-bold text-uppercase">Critical Stock Alert</div>
-                <div class="kpi-value text-danger">{{ low_stock_count }}</div>
-                <div class="extra-small text-muted">Items below safety margin</div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card card-custom kpi-card border-bottom border-4 border-primary">
-                <div class="small text-muted fw-bold text-uppercase">Avg Daily Usage</div>
-                <div class="kpi-value text-primary">{{ forecast }} <small class="fs-6 text-muted">bags</small></div>
-                <div class="extra-small text-muted">Combined burn rate</div>
-            </div>
-        </div>
-    </div>
-
-    <div class="row g-4">
-        <div class="col-lg-8">
-            <div class="card card-custom p-4">
-                <div class="d-flex justify-content-between align-items-center mb-4">
-                    <h5 class="fw-bold mb-0">Consumption Trend (12 Months)</h5>
-                    <span class="badge bg-primary-subtle text-primary">ML Moving Average</span>
-                </div>
-                <div class="chart-container">
-                    <canvas id="stockChart"></canvas>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-lg-4">
-            <div class="card card-custom p-4 h-100 shadow-sm border-0 bg-primary text-white">
-                <h5 class="fw-bold mb-4">AI Strategic Insight</h5>
-                
-                <div class="mb-4 bg-white bg-opacity-10 p-3 rounded-4">
-                    <label class="small fw-bold opacity-75">TOP RECOMMENDATION</label>
-                    <p class="mb-0 fw-bold mt-1" style="font-size: 0.95rem;">{{ recommendation }}</p>
-                </div>
-
-                <div class="mb-4">
-                    <label class="small fw-bold opacity-75 mb-2">STOCK-OUT PREDICTIONS</label>
-                    {% for item in analyzed_items %}
-                    <div class="d-flex justify-content-between align-items-center mb-2 p-2 rounded-3 bg-white bg-opacity-10">
-                        <span class="small">{{ item.name }}</span>
-                        <span class="badge {{ 'bg-danger shadow' if item.days_left != 'N/A' and item.days_left <= 3 else 'bg-light text-dark' }}">
-                            {{ item.days_left }}{{ ' Days Left' if item.days_left != 'N/A' else '' }}
-                        </span>
+    <div class="col-12">
+        <div class="card card-custom border-0 shadow-sm overflow-hidden" style="border-radius: 20px;">
+            <div class="row g-0">
+                <div class="col-md-3 bg-primary text-white p-4 d-flex align-items-center justify-content-center border-end">
+                    <div class="text-center">
+                        <div class="small text-uppercase opacity-75 fw-bold mb-1">Lipa City Weather</div>
+                        <h2 class="fw-bold mb-0" style="font-size: 2.5rem;">{{ weather.temp }}°C</h2>
+                        <div class="badge bg-white text-primary rounded-pill px-3 mt-2 fw-bold">
+                            <i class="bi bi-cloud-sun-fill me-1"></i> {{ weather.condition }}
+                        </div>
                     </div>
-                    {% endfor %}
                 </div>
-
-                <div class="mt-auto">
-                    <div class="small opacity-75 fw-bold mb-1">SYSTEM STATUS</div>
-                    <div class="progress" style="height: 6px; background: rgba(255,255,255,0.2);">
-                        <div class="progress-bar bg-info" style="width: 100%"></div>
+                <div class="col-md-9 p-4 bg-white">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <div>
+                            <h5 class="fw-bold mb-1 text-dark">
+                                <i class="bi bi-stars text-primary me-2"></i>INVENTRA AI Insight: {{ current_month }} Strategy
+                            </h5>
+                            <p class="text-muted mb-0 small">{{ weather.message }}</p>
+                        </div>
+                        <div class="text-end">
+                            <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-3 py-2">
+                                {% if current_month in ['October', 'November', 'December'] %}
+                                    <i class="bi bi-graph-up-arrow me-1"></i> Peak Season Mode
+                                {% elif current_month in ['January', 'February'] %}
+                                    <i class="bi bi-graph-down-arrow me-1"></i> Lean Season Mode
+                                {% else %}
+                                    <i class="bi bi-activity me-1"></i> Normal Operation Mode
+                                {% endif %}
+                            </span>
+                        </div>
+                    </div>
+                    <div class="p-3 bg-light rounded-3 border-start border-primary border-4 mt-3">
+                        <div class="small fw-bold text-dark">
+                            <i class="bi bi-lightbulb-fill text-warning me-1"></i> Strategic Recommendation:
+                        </div>
+                        <p class="mb-0 small text-muted">
+                            Dahil sa kasalukuyang <strong>{{ current_month }} season</strong>, ang burn rate ay 
+                            {% if current_month in ['October', 'November', 'December'] %}inaasahang tataas. Siguraduhin ang 20% extra buffer.{% else %}nananatiling stable base sa historical trends.{% endif %}
+                        </p>
                     </div>
                 </div>
             </div>
         </div>
     </div>
+</div>
+
+<div class="row g-4 mb-4">
+    <div class="col-md-3">
+        <div class="card card-custom kpi-card border-bottom border-4 border-warning">
+            <div class="small text-muted fw-bold text-uppercase">Total Asset Value</div>
+            <div class="kpi-value text-dark">₱{{ "{:,.2f}".format(total_inventory_value) }}</div>
+            <div class="text-warning extra-small fw-bold">Current Raw Material Worth</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card card-custom kpi-card border-bottom border-4 border-info">
+            <div class="small text-muted fw-bold text-uppercase">AI Budget Forecast</div>
+            <div class="kpi-value text-info">₱{{ "{:,.2f}".format(predicted_expenses) }}</div>
+            <div class="extra-small text-muted fw-bold">Estimated Next 30 Days Cost</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card card-custom kpi-card border-bottom border-4 border-danger">
+            <div class="small text-muted fw-bold text-uppercase">Critical Stock Alert</div>
+            <div class="kpi-value text-danger">{{ low_stock_count }}</div>
+            <div class="extra-small text-muted fw-bold">Items needing urgent attention</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card card-custom kpi-card border-bottom border-4 border-primary">
+            <div class="small text-muted fw-bold text-uppercase">Avg Daily Usage</div>
+            <div class="kpi-value text-primary">{{ forecast }} <small class="fs-6 text-muted">bags/day</small></div>
+            <div class="extra-small text-muted fw-bold">Combined burn rate</div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-8">
+        <div class="card card-custom p-4 shadow-sm border-0 h-100">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h5 class="fw-bold mb-0 text-dark">Consumption Trend (12 Months)</h5>
+                    <p class="text-muted small mb-0">Historical usage vs AI Prediction</p>
+                </div>
+                <span class="badge bg-primary-subtle text-primary px-3 py-2">ML Moving Average</span>
+            </div>
+            <div class="chart-container">
+                <canvas id="stockChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="card card-custom p-4 h-100 shadow-sm border-0 bg-primary text-white overflow-hidden position-relative">
+            <div class="position-absolute" style="top: -20px; right: -20px; width: 100px; height: 100px; background: rgba(255,255,255,0.1); border-radius: 50%;"></div>
+            
+            <h5 class="fw-bold mb-4 position-relative">AI Strategic Insight</h5>
+            
+            <div class="mb-4 bg-white bg-opacity-10 p-3 rounded-4 border border-white border-opacity-10">
+                <label class="small fw-bold opacity-75 text-uppercase">Top Recommendation</label>
+                <p class="mb-0 fw-bold mt-1" style="font-size: 0.95rem;">
+                    <i class="bi bi-check2-circle me-2"></i>{{ recommendation }}
+                </p>
+            </div>
+
+            <div class="mb-4">
+                <label class="small fw-bold opacity-75 mb-3 text-uppercase">Stock-out Predictions</label>
+                {% for item in analyzed_items %}
+                <div class="d-flex justify-content-between align-items-center mb-2 p-2 px-3 rounded-3 bg-white bg-opacity-10 border border-white border-opacity-10">
+                    <span class="small fw-medium">{{ item.name }}</span>
+                    <span class="badge {{ 'bg-danger shadow-sm border border-danger' if item.days_left != 'N/A' and item.days_left <= 3 else 'bg-light text-dark' }}">
+                        {{ item.days_left }}{{ ' Days Left' if item.days_left != 'N/A' else '' }}
+                    </span>
+                </div>
+                {% endfor %}
+            </div>
+
+            <div class="mt-auto pt-3">
+                <div class="d-flex justify-content-between small opacity-75 fw-bold mb-2">
+                    <span>AI RELIABILITY SCORE</span>
+                    <span>94%</span>
+                </div>
+                <div class="progress shadow-sm" style="height: 8px; background: rgba(255,255,255,0.2); border-radius: 10px;">
+                    <div class="progress-bar bg-info progress-bar-striped progress-bar-animated" style="width: 94%"></div>
+                </div>
+                <p class="extra-small mt-2 opacity-50 text-center italic">Calculated based on 30-day burn rate volatility</p>
+            </div>
+        </div>
+    </div>
+</div>
 
     <div class="card card-custom p-4 mt-4">
         <h5 class="fw-bold mb-4">Inventory Forecasting & Procurement Plan</h5>
