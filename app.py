@@ -10,10 +10,11 @@ from vonage import Auth, Vonage
 from vonage_sms import SmsMessage # Dito kukunin ang SmsMessage sa v3 SDK
 import cv2
 import numpy as np
+import os
 
 # Palitan ito ng URL na galing sa IP Webcam app sa phone mo
 # Halimbawa: http://192.168.1.5:8080/shot.jpg
-URL = "http://7.129.52.221:8080/shot.jpg"
+URL = os.environ.get('CAMERA_URL', "http://localhost:8080/shot.jpg")
 
 def detect_finished_goods():
     # Sinisimulan ang real-time monitoring ng finished goods [cite: 130]
@@ -87,9 +88,9 @@ def detect_finished_goods():
     cv2.destroyAllWindows()
     
 # Gamitin ang credentials mula sa app.py mo
-VONAGE_API_KEY = "15471af7"
-VONAGE_API_SECRET = "qmz58VQZKSfLFuhJ"
-SUPPLIER_NUMBER = "639701316066"
+VONAGE_API_KEY = os.environ.get("VONAGE_API_KEY", "15471af7")
+VONAGE_API_SECRET = os.environ.get("VONAGE_API_SECRET", "qmz58VQZKSfLFuhJ")
+SUPPLIER_NUMBER = os.environ.get("SUPPLIER_NUMBER", "639701316066")
 
 auth = Auth(api_key=VONAGE_API_KEY, api_secret=VONAGE_API_SECRET)
 client = Vonage(auth=auth)
