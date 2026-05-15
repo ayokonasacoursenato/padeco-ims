@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PADECO IMS | Purchasing Dashboard</title>
+    
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    
+    <style>
+        :root { --primary-blue: #3b82f6; --bg-gray: #f9fafb; --text-dark: #1f2937; }
+        body { background: var(--bg-gray); font-family: 'Inter', sans-serif; padding-top: 80px; }
+        
+        .navbar-custom { background: white; border-bottom: 1px solid #e5e7eb; padding: 15px 0; }
+        .navbar-brand { font-weight: 800; color: var(--text-dark) !important; letter-spacing: -0.5px; }
+        .navbar-brand span { color: var(--primary-blue); }
+        .nav-link { color: #6b7280 !important; font-weight: 500; font-size: 0.95rem; margin: 0 10px; }
+        .nav-link.active { color: var(--primary-blue) !important; font-weight: 700; }
+        
+        .card-custom { border: 1px solid #e5e7eb; border-radius: 12px; background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.02); }
+        .kpi-label { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+        .kpi-value { font-size: 1.5rem; font-weight: 800; line-height: 1.2; }
+        
+        .table thead th { background: transparent; color: #6b7280; font-size: 0.8rem; font-weight: 600; text-transform: uppercase; border-bottom: 1px solid #f3f4f6; padding: 15px; }
+        .table tbody td { padding: 15px; color: var(--text-dark); border-bottom: 1px solid #f3f4f6; }
+        
+        .chat-container { height: 435px; display: flex; flex-direction: column; }
+        .chat-messages { flex-grow: 1; overflow-y: auto; background: #f8f9fa; padding: 15px; }
+        .message-bubble { max-width: 85%; padding: 10px 14px; border-radius: 18px; font-size: 0.88rem; margin-bottom: 12px; position: relative; }
+        .msg-received { background: #ffffff; color: var(--text-dark); align-self: flex-start; border-bottom-left-radius: 4px; border: 1px solid #e5e7eb; }
+        .msg-sent { background: var(--primary-blue); color: white; align-self: flex-end; border-bottom-right-radius: 4px; }
+        
+        .supplier-icon { width: 40px; height: 40px; background: #eff6ff; color: #2563eb; display: flex; align-items: center; justify-content: center; border-radius: 10px; }
+    </style>
+</head>
+<body>
+
+<nav class="navbar navbar-expand-lg navbar-custom fixed-top">
+    <div class="container">
+        <a class="navbar-brand" href="/purchasing_dashboard">PADECO <span>IMS</span></a>
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav ms-auto align-items-center">
+                <li class="nav-item"><a class="nav-link active" href="/purchasing_dashboard">Dashboard</a></li>
+                <li class="nav-item"><a class="nav-link" href="/production_inventory">Inventory</a></li>
+                <li class="nav-item"><a class="nav-link" href="/request_history">History</a></li>
+                <li class="nav-item border-start ms-2 ps-3">
+                    <span class="nav-link disabled text-dark small px-0"><i class="bi bi-person-circle"></i> {{ username }}</span>
+                </li>
+                <li class="nav-item">
+                    <button type="button" class="nav-link text-danger fw-bold border-0 bg-transparent" data-bs-toggle="modal" data-bs-target="#logoutModal">Logout</button>
+                </li>
+            </ul>
+        </div>
+    </div>
+</nav>
+
+<div class="container pb-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="fw-bold mb-0">Purchasing & Procurement</h4>
+            <p class="text-muted small mb-0">Supplier coordination and AI restocking suggestions</p>
+        </div>
+        <div class="badge bg-white text-muted border px-3 py-2 shadow-sm fw-medium">
+            <i class="bi bi-calendar3 me-2 text-primary"></i>{{ current_date }}
+        </div>
+    </div>
+    
+    <div class="row g-3 mb-4">
+        <div class="col-md-4">
+            <div class="card card-custom p-3 border-start border-danger border-4 shadow-sm">
+                <div class="kpi-label text-danger mb-1">Restock Needed</div>
+                <div class="kpi-value text-dark">{{ low_stock_count }} Items</div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card card-custom p-3 border-start border-primary border-4 shadow-sm">
+                <div class="kpi-label text-primary mb-1">Estimated Expenses</div>
+                <div class="kpi-value text-dark">₱{{ "{:,.2f}".format(total_est_cost) }}</div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card card-custom p-3 border-start border-warning border-4 shadow-sm">
+                <div class="kpi-label text-warning mb-1">Incoming Requests</div>
+                <div class="kpi-value text-dark">{{ pending_requests|length }} Pending</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-4 g-3">
+        <div class="col-lg-8">
+            <div class="card card-custom p-4 shadow-sm mb-4">
+                <h6 class="fw-bold mb-4 small text-uppercase text-muted">
+                    <i class="bi bi-clock-history me-2 text-warning"></i>Pending Production Requests
+                </h6>
+                <div class="table-responsive">
+                    <table class="table align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Requester</th>
+                                <th>Material</th>
+                                <th>Quantity</th>
+                                <th class="text-end">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% if pending_requests %}
+                                {% for req in pending_requests %}
+                                <tr>
+                                    <td class="small text-muted">{{ req[5].strftime('%b %d, %I:%M %p') if req[5] else 'N/A' }}</td>
+                                    <td class="fw-bold">{{ req[3] }}</td>
+                                    <td>{{ req[1] }}</td>
+                                    <td><span class="badge bg-warning-subtle text-warning px-3">{{ req[2] }} bags</span></td>
+                                    <td class="text-end">
+                                        <button type="button" class="btn btn-sm btn-success rounded-pill px-3 shadow-sm fw-bold" 
+                                                data-bs-toggle="modal" data-bs-target="#orderModal{{ req[0] }}">
+                                            Order & SMS
+                                        </button>
+                                        
+                                        <div class="modal fade" id="orderModal{{ req[0] }}" tabindex="-1" aria-hidden="true">
+                                            <div class="modal-dialog modal-dialog-centered">
+                                                <div class="modal-content border-0 shadow">
+                                                    <div class="modal-body text-center p-5">
+                                                        <i class="bi bi-cart-check text-success mb-3" style="font-size: 3rem;"></i>
+                                                        <h5 class="fw-bold">Process Request?</h5>
+                                                        <p class="text-muted small">This will alert the supplier via SMS. Inventory is updated only upon delivery receipt.</p>
+                                                        <form action="/approve_and_buy" method="POST">
+                                                            <input type="hidden" name="request_id" value="{{ req[0] }}">
+                                                            <input type="hidden" name="product_name" value="{{ req[1] }}">
+                                                            <input type="hidden" name="quantity" value="{{ req[2] }}">
+                                                            <div class="d-grid gap-2 mt-4">
+                                                                <button type="submit" class="btn btn-primary fw-bold py-2">Confirm & Send SMS</button>
+                                                                <button type="button" class="btn btn-light fw-bold py-2" data-bs-dismiss="modal">Cancel</button>
+                                                            </div>
+                                                        </form>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            {% else %}
+                            <tr><td colspan="5" class="text-center py-4 text-muted">No pending requests.</td></tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="card card-custom p-4 shadow-sm">
+                <h6 class="fw-bold mb-4 small text-uppercase text-muted">AI Restock Suggestions (Reference)</h6>
+                <div class="table-responsive">
+                    <table class="table align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Product</th>
+                                <th>Current Stock</th>
+                                <th>AI Recommendation</th>
+                                <th class="text-end">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in analyzed_items %}
+                            <tr>
+                                <td class="fw-bold">{{ item.name }}</td>
+                                <td>{{ item.qty }} bags</td>
+                                <td><span class="text-primary fw-bold">+{{ item.suggested }} bags</span></td>
+                                <td class="text-end">
+                                    {% if item.qty <= 5 %}
+                                        <span class="badge bg-danger-subtle text-danger px-3">Priority</span>
+                                    {% else %}
+                                        <span class="badge bg-light text-muted px-3">Stable</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card card-custom p-4 shadow-sm mb-4 border-top border-primary border-4">
+                <h6 class="fw-bold mb-3 small text-uppercase text-muted"><i class="bi bi-person-lines-fill me-2"></i>Primary Supplier</h6>
+                <div class="d-flex align-items-center mb-3">
+                    <div class="supplier-icon me-3">
+                        <i class="bi bi-truck fs-5"></i>
+                    </div>
+                    <div>
+                        <div class="fw-bold text-dark">Agri-Feeds Supply Co.</div>
+                        <div class="text-muted extra-small">Main Raw Material Partner</div>
+                    </div>
+                </div>
+                <div class="p-3 bg-light rounded-3">
+                    <div class="d-flex justify-content-between mb-2">
+                        <small class="text-muted">SMS Hotlink:</small>
+                        <small class="fw-bold text-primary">+63 970 131 6066</small>
+                    </div>
+                    <div class="d-flex justify-content-between">
+                        <small class="text-muted">Avg. Delivery:</small>
+                        <small class="fw-bold text-dark">1-2 Days</small>
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <span class="badge bg-success-subtle text-success w-100 py-2"><i class="bi bi-check-circle-fill me-1"></i> SMS API Connected</span>
+                </div>
+            </div>
+
+            <div class="card card-custom chat-container shadow-sm border-top border-primary border-4">
+                <div class="p-3 border-bottom d-flex align-items-center">
+                    <div class="bg-primary-subtle text-primary rounded-circle p-2 me-2"><i class="bi bi-chat-dots"></i></div>
+                    <h6 class="fw-bold mb-0">Dept. Chat</h6>
+                </div>
+                <div class="chat-messages d-flex flex-column" id="chat-box">
+                    {% for comment in all_comments %}
+                    <div class="message-bubble d-flex flex-column {% if comment[1] == username %}msg-sent align-self-end{% else %}msg-received align-self-start{% endif %}">
+                        <small class="fw-bold mb-1" style="font-size: 0.65rem;">{{ comment[1] }}</small>
+                        <span>{{ comment[2] }}</span>
+                        <small class="text-end mt-1" style="font-size: 0.6rem; opacity: 0.7;">{{ comment[3] }}</small>
+                    </div>
+                    {% endfor %}
+                </div>
+                <div class="p-3 border-top bg-white">
+                    <form action="/send_comment" method="POST" class="input-group">
+                        <input type="hidden" name="request_id" value="0">
+                        <input type="text" name="message" class="form-control rounded-start" placeholder="Message..." required>
+                        <button class="btn btn-primary rounded-end"><i class="bi bi-send"></i></button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="logoutModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-body text-center p-4">
+                <i class="bi bi-box-arrow-right text-danger mb-2" style="font-size: 2rem;"></i>
+                <h6 class="fw-bold">Logout Session?</h6>
+                <div class="d-grid gap-2 mt-3">
+                    <a href="/logout" class="btn btn-danger btn-sm py-2 text-decoration-none">Logout</a>
+                    <button type="button" class="btn btn-light btn-sm py-2" data-bs-dismiss="modal">Stay</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    window.onload = function() {
+        const chatBox = document.getElementById('chat-box');
+        if(chatBox) chatBox.scrollTop = chatBox.scrollHeight;
+    };
+</script>
+</body>
+</html>

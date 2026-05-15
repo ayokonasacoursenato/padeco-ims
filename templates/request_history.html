@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PADECO IMS | Activity History</title>
+    
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    
+    <style>
+        :root { --primary-blue: #3b82f6; --bg-gray: #f9fafb; --text-dark: #1f2937; }
+        body { background: var(--bg-gray); font-family: 'Inter', sans-serif; padding-top: 80px; }
+        
+        .navbar-custom { background: white; border-bottom: 1px solid #e5e7eb; padding: 15px 0; }
+        .navbar-brand { font-weight: 800; color: var(--text-dark) !important; letter-spacing: -0.5px; }
+        .navbar-brand span { color: var(--primary-blue); }
+        .nav-link { color: #6b7280 !important; font-weight: 500; font-size: 0.95rem; margin: 0 10px; }
+        .nav-link.active { color: var(--primary-blue) !important; font-weight: 700; }
+        
+        .card-custom { border: 1px solid #e5e7eb; border-radius: 12px; background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.02); }
+        .filter-btn { border-radius: 20px; padding: 6px 18px; font-size: 0.85rem; font-weight: 600; transition: 0.2s; }
+        
+        .table thead th { background: transparent; color: #6b7280; font-size: 0.8rem; font-weight: 700; text-transform: uppercase; border-bottom: 1px solid #f3f4f6; padding: 15px; }
+        .table tbody td { padding: 15px; color: var(--text-dark); border-bottom: 1px solid #f3f4f6; font-size: 0.9rem; }
+        
+        .dataTables_wrapper .dataTables_filter input { border-radius: 8px; border: 1px solid #e5e7eb; padding: 5px 15px; }
+        .page-link { border-radius: 8px !important; margin: 0 3px; }
+    </style>
+</head>
+<body>
+<nav class="navbar navbar-expand-lg navbar-custom fixed-top">
+    <div class="container">
+        <a class="navbar-brand" href="{{ url_for('purchasing_dashboard') if session.get('role') == 'purchasing' else url_for('production_dashboard') }}">
+            PADECO <span>IMS</span>
+        </a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav ms-auto align-items-center">
+                <li class="nav-item">
+                    <a class="nav-link" href="{{ url_for('purchasing_dashboard') if session.get('role') == 'purchasing' else url_for('production_dashboard') }}">Dashboard</a>
+                </li>
+                
+                <li class="nav-item"><a class="nav-link" href="/production_inventory">Inventory</a></li>
+                <li class="nav-item"><a class="nav-link active" href="/request_history">History</a></li>
+                
+                {% if session.get('role') != 'purchasing' %}
+                <li class="nav-item"><a class="nav-link" href="/run_camera"><i class="bi bi-camera me-1"></i> IoT Scanner</a></li>
+                {% endif %}
+
+                <li class="nav-item border-start ms-2 ps-3">
+                    <span class="nav-link disabled text-dark small px-0"><i class="bi bi-person-circle"></i> {{ username }}</span>
+                </li>
+                <li class="nav-item">
+                    <button type="button" class="nav-link text-danger fw-bold border-0 bg-transparent" data-bs-toggle="modal" data-bs-target="#logoutModal">
+                        Logout
+                    </button>
+                </li>
+            </ul>
+        </div>
+    </div>
+</nav>
+
+<div class="container pb-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="fw-bold mb-0 text-dark">
+                {% if session.get('role') == 'purchasing' %}Procurement & Audit History{% else %}Production Activity History{% endif %}
+            </h4>
+            <p class="text-muted small mb-0">Complete logs for inventory transactions and requests</p>
+        </div>
+        <a href="javascript:history.back()" class="btn btn-white border text-muted px-3 py-2 shadow-sm fw-medium">
+            <i class="bi bi-arrow-left me-2"></i>Back
+        </a>
+    </div>
+
+    <div class="card card-custom p-3 mb-4 shadow-sm border-0">
+        <div class="d-flex gap-2 flex-wrap">
+            <a href="/request_history?type=ALL" class="btn filter-btn {% if current_filter == 'ALL' %}btn-primary text-white{% else %}btn-light text-muted{% endif %} shadow-sm">All Logs</a>
+            <a href="/request_history?type=STOCK-OUT" class="btn filter-btn {% if current_filter == 'STOCK-OUT' %}btn-danger text-white{% else %}btn-light text-danger{% endif %} shadow-sm">Stock-Outs</a>
+            <a href="/request_history?type=STOCK-IN" class="btn filter-btn {% if current_filter == 'STOCK-IN' %}btn-success text-white{% else %}btn-light text-success{% endif %} shadow-sm">Stock-Ins (Received)</a>
+            <a href="/request_history?type=PROCUREMENT" class="btn filter-btn {% if current_filter == 'PROCUREMENT' %}btn-warning text-white{% else %}btn-light text-warning{% endif %} shadow-sm">Procurements</a>
+        </div>
+    </div>
+
+    <div class="card card-custom shadow-sm p-3 border-0">
+        <div class="table-responsive">
+            <table id="historyTable" class="table align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th class="d-none">ID</th> 
+                        <th class="ps-4">Action Type</th>
+                        <th>Material/Product</th>
+                        <th>Volume</th>
+                        <th>Date & Time</th>
+                        <th class="text-center">Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for act in activities %}
+                    <tr>
+                        <td class="d-none">{{ act[0] }}</td>
+                        <td class="ps-4">
+                            <span class="badge 
+                                {% if act[3] == 'STOCK-OUT' %}bg-danger-subtle text-danger
+                                {% elif act[3] == 'STOCK-IN' %}bg-success-subtle text-success
+                                {% else %}bg-warning-subtle text-warning{% endif %} rounded-pill px-3">
+                                {{ act[3] }}
+                            </span>
+                        </td>
+                        <td class="fw-bold text-dark">{{ act[1] }}</td>
+                        <td><span class="fw-bold text-primary">{{ act[2] }} bags</span></td>
+                        <td class="small text-muted">{{ act[5] }}</td>
+                        <td class="text-center">
+                            <span class="badge 
+                                {% if act[4] == 'PENDING' %}bg-warning
+                                {% elif act[4] == 'ORDERED' %}bg-info
+                                {% elif act[4] == 'COMPLETED' %}bg-success
+                                {% else %}bg-secondary{% endif %} rounded-pill px-3 shadow-sm" style="font-size: 0.7rem;">
+                                {{ act[4] }}
+                            </span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="logoutModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-body text-center p-4">
+                <i class="bi bi-box-arrow-right text-danger mb-3" style="font-size: 2.5rem;"></i>
+                <h6 class="fw-bold">End Session?</h6>
+                <div class="d-grid gap-2 mt-3">
+                    <a href="/logout" class="btn btn-danger fw-bold rounded-3 text-decoration-none">Logout</a>
+                    <button type="button" class="btn btn-light fw-bold rounded-3" data-bs-dismiss="modal">Stay</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    $(document).ready(function() {
+        $('#historyTable').DataTable({
+            "order": [[ 0, "desc" ]], 
+            "pageLength": 10,
+            "language": {
+                "search": "Filter history:",
+                "paginate": {
+                    "previous": "<i class='bi bi-chevron-left'></i>",
+                    "next": "<i class='bi bi-chevron-right'></i>"
+                }
+            },
+            "dom": '<"d-flex justify-content-between align-items-center mb-3"lf>rt<"d-flex justify-content-between align-items-center mt-3"ip>'
+        });
+    });
+</script>
+</body>
+</html>
